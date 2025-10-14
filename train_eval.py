@@ -136,3 +136,98 @@ def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     Manual RMSE for compatibility with older scikit-learn (no squared=False arg).
     """
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
+
+def train_and_eval(train_df: pd.DataFrame, seed: int = 42, val_frac: float = 0.2):
+    """
+    Returns a dict of metrics and writes:
+      - metrics.txt
+      - val_scatter.png
+      - val_preds.csv
+    """
+    # Label + features
+    train_df = add_rul_train(train_df)
+    train_df = simple_features(train_df)
+
+    # Keep only needed columns (ops + sensors + engineered + RUL)
+    feature_cols_all = ["op1", "op2", "op3"] + [c for c in train_df.columns if c.startswith("s")]
+    train_df = train_df[["unit", "cycle", "RUL"] + feature_cols_all]
+
+    # Split by engine; normalize using training engines only
+    tr_units, va_units = unit_split(train_df, val_frac=val_frac, seed=seed)
+    mu, sd = zscore_fit(tr_units, feature_cols_all)
+    tr_units_n = zscore_apply(tr_units, feature_cols_all, mu, sd)
+    va_units_n = zscore_apply(va_units, feature_cols_all, mu, sd)
+
+    Xtr, ytr, _ = make_matrix(tr_units_n)
+    Xva, yva, _ = make_matrix(va_units_n)
+
+    # 1) Ridge baseline
+    ridge = Ridge(alpha=1.0).fit(Xtr, ytr)
+    p_ridge = ridge.predict(Xva)
+    mae_r   = float(mean_absolute_error(yva, p_ridge))
+    rmse_r  = rmse(yva, p_ridge)
+    nasa_r  = nasa_score(yva, p_ridge)
+
+    # 2) RandomForest (easy, usually better)
+    rf = RandomForestRegressor(n_estimators=200, random_state=seed, n_jobs=-1)
+    rf.fit(Xtr, ytr)
+    p_rf   = rf.predict(Xva)
+    mae_rf = float(mean_absolute_error(yva, p_rf))
+    rmse_rf= rmse(yva, p_rf)
+    nasa_rf= nasa_score(yva, p_rf)
+
+    # Print to console
+    print(f"Ridge  | MAE={mae_r:.2f}  RMSE={rmse_r:.2f}  NASA={nasa_r:.2f}")
+    print(f"RF     | MAE={mae_rf:.2f} RMSE={rmse_rf:.2f} NASA={nasa_rf:.2f}")
+
+    # Plot: RF predicted vs true
+    plt.figure()
+    plt.scatter(yva, p_rf, s=8, alpha=0.6, label="RF preds")
+    lo, hi = float(yva.min()), float(yva.max())
+    plt.plot([lo, hi], [lo, hi], linestyle="--", label="ideal")
+    plt.xlabel("True RUL")
+    plt.ylabel("Predicted RUL")
+    plt.title("Validation: RF Predicted vs True RUL")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("val_scatter.png")
+    print("Saved plot: val_scatter.png")
+
+    # Save preds (with a simple maintenance flag)
+    flag = (p_rf < 20.0)
+    out = pd.DataFrame({"true_rul": yva.astype(float),
+                        "pred_rul_rf": p_rf.astype(float),
+                        "flag_maint_<20": flag})
+    out.to_csv("val_preds.csv", index=False)
+    print("Saved predictions: val_preds.csv")
+
+    # Save metrics
+    with open("metrics.txt", "w") as f:
+        f.write("Model,MAE,RMSE,NASA\n")
+        f.write(f"Ridge,{mae_r:.4f},{rmse_r:.4f},{nasa_r:.4f}\n")
+        f.write(f"RF,{mae_rf:.4f},{rmse_rf:.4f},{nasa_rf:.4f}\n")
+    print("Saved metrics: metrics.txt")
+
+    return {
+        "ridge": {"MAE": mae_r, "RMSE": rmse_r, "NASA": nasa_r},
+        "rf":    {"MAE": mae_rf, "RMSE": rmse_rf, "NASA": nasa_rf},
+    }
+
+def main():
+    parser = argparse.ArgumentParser(description="Turbofan RUL Starter (CMAPSS FD001, scikit-learn).")
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="CMaps",
+        help="Folder containing FD001 files (either directly or in a subfolder 'FD001'). Default: CMaps",
+    )
+    parser.add_argument("--val_frac", type=float, default=0.2, help="Validation fraction by engine (default 0.2)")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed (default 42)")
+    args = parser.parse_args()
+
+    data_root = Path(args.data_dir)
+    train_df, test_df, rul_test = read_fd001(data_root)
+    _ = train_and_eval(train_df, seed=args.seed, val_frac=args.val_frac)
+
+if __name__ == "__main__":
+    main()
