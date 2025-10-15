@@ -33,7 +33,7 @@ These can be placed either directly in the specified data directory or inside a 
 ## Usage
 
 Run the training and evaluation script:
-
+```source venv/bin/activate```
 ```python3 main.py --data_dir CMaps```
 
 ## Outputs
