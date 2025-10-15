@@ -1,8 +1,8 @@
-#Turbofan Engine Remaining Useful Life (RUL) Prediction
+# Turbofan Engine Remaining Useful Life (RUL) Prediction
 
 This project implements a simple machine learning pipeline for predicting the **Remaining Useful Life (RUL)** of turbofan engines using the NASA CMAPSS dataset (FD001 subset). It provides baseline models (Ridge Regression and Random Forest) along with basic feature engineering, normalization, evaluation, and visualization.
 
-##Dataset
+## Dataset
 
 The code expects the FD001 data files from the NASA CMAPSS dataset:
 
@@ -12,7 +12,7 @@ The code expects the FD001 data files from the NASA CMAPSS dataset:
 
 These can be placed either directly in the specified data directory or inside a subfolder named FD001.
 
-##Features
+## Features
 
 * **Automatic dataset detection and loading**
 * **Rolling mean and first-order difference** feature generation
@@ -30,13 +30,13 @@ These can be placed either directly in the specified data directory or inside a 
   * Validation predictions (```val_preds.csv```)
   * Model metrics summary (```metrics.txt```)
 
-##Usage
+## Usage
 
 Run the training and evaluation script:
 
 ```python3 main.py --data_dir CMaps```
 
-##Outputs
+## Outputs
 
 After running, you will find:
 
@@ -44,6 +44,6 @@ After running, you will find:
 * ```val_preds.csv``` — validation predictions and maintenance flags 
 * ```metrics.txt``` — summary of evaluation metrics for both models
 
-Reference
+## Reference
 
 * [NASA Prognostics Data Repository — CMAPSS Turbofan Engine Degradation Simulation Data Set](https://www.kaggle.com/datasets/behrad3d/nasa-cmaps)
